@@ -2,18 +2,22 @@
 
 namespace App\Models;
 
+use App\Casts\AppointmentStatusCast;
 use App\Enums\AppointmentStatus;
+use App\Models\Concerns\HasUuidRouteKey;
 use Database\Factories\AppointmentFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Appointment extends Model
 {
     /** @use HasFactory<AppointmentFactory> */
-    use HasFactory;
+    use HasFactory, HasUuidRouteKey;
 
     protected $fillable = [
+        'uuid',
         'branch_id',
         'staff_id',
         'customer_id',
@@ -32,7 +36,7 @@ class Appointment extends Model
         return [
             'start_at' => 'datetime',
             'end_at' => 'datetime',
-            'status' => AppointmentStatus::class,
+            'status' => AppointmentStatusCast::class,
         ];
     }
 
@@ -41,7 +45,7 @@ class Appointment extends Model
      */
     public function branch(): BelongsTo
     {
-        return $this->belongsTo(Branch::class);
+        return $this->belongsTo(Branch::class)->withTrashed();
     }
 
     /**
@@ -49,7 +53,7 @@ class Appointment extends Model
      */
     public function staff(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'staff_id');
+        return $this->belongsTo(User::class, 'staff_id')->withTrashed();
     }
 
     /**
@@ -65,6 +69,30 @@ class Appointment extends Model
      */
     public function service(): BelongsTo
     {
-        return $this->belongsTo(Service::class);
+        return $this->belongsTo(Service::class)->withTrashed();
+    }
+
+    public function getBookingReferenceAttribute(): string
+    {
+        $timestamp = (string) ($this->created_at?->getTimestamp() ?? now()->getTimestamp());
+
+        return sprintf('APT-%s-%06d', $timestamp, $this->id);
+    }
+
+    public function scopeForBranchLocalDate(Builder $query, int $branchId, string $localDate): Builder
+    {
+        $branch = Branch::query()->find($branchId);
+
+        if (! $branch) {
+            return $query;
+        }
+
+        $startUtc = branch_local_to_utc($localDate.' 00:00:00', $branch->timezone);
+        $endUtc = $startUtc->addDay();
+
+        return $query
+            ->where('branch_id', $branch->id)
+            ->where('start_at', '>=', $startUtc->toDateTimeString())
+            ->where('start_at', '<', $endUtc->toDateTimeString());
     }
 }

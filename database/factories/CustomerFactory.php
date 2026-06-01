@@ -20,7 +20,7 @@ class CustomerFactory extends Factory
         return [
             'name' => fake()->name(),
             'email' => fake()->safeEmail(),
-            'phone' => '+60'.fake()->numerify('1########'),
+            'phone_number' => '+60'.fake()->numerify('1########'),
         ];
     }
 }

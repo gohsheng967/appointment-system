@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Domain\Appointments\Actions\CreateAppointmentAction;
 use App\Domain\Appointments\Actions\TransitionAppointmentStatusAction;
+use App\Domain\Appointments\Actions\UpdateAppointmentAction;
 use App\Enums\AppointmentStatus;
 use App\Enums\UserRole;
 use App\Models\Appointment;
@@ -112,6 +113,58 @@ class AppointmentRulesTest extends TestCase
         $this->assertInstanceOf(Appointment::class, $second);
     }
 
+    public function test_overlap_blocks_for_completed_status_but_not_no_show(): void
+    {
+        [$branch, $service, $customer, $staff] = $this->seedBase();
+
+        $first = app(CreateAppointmentAction::class)([
+            'branch_id' => $branch->id,
+            'service_id' => $service->id,
+            'customer_id' => $customer->id,
+            'staff_id' => $staff->id,
+            'start_at' => '2026-06-01T10:00',
+        ]);
+
+        app(TransitionAppointmentStatusAction::class)($first, AppointmentStatus::CONFIRMED);
+        app(TransitionAppointmentStatusAction::class)($first, AppointmentStatus::IN_PROGRESS);
+        app(TransitionAppointmentStatusAction::class)($first, AppointmentStatus::COMPLETED);
+
+        $this->expectException(ValidationException::class);
+        app(CreateAppointmentAction::class)([
+            'branch_id' => $branch->id,
+            'service_id' => $service->id,
+            'customer_id' => $customer->id,
+            'staff_id' => $staff->id,
+            'start_at' => '2026-06-01T10:30',
+        ]);
+    }
+
+    public function test_overlap_allows_booking_when_existing_appointment_is_no_show(): void
+    {
+        [$branch, $service, $customer, $staff] = $this->seedBase();
+
+        $first = app(CreateAppointmentAction::class)([
+            'branch_id' => $branch->id,
+            'service_id' => $service->id,
+            'customer_id' => $customer->id,
+            'staff_id' => $staff->id,
+            'start_at' => '2026-06-01T10:00',
+        ]);
+
+        app(TransitionAppointmentStatusAction::class)($first, AppointmentStatus::CONFIRMED);
+        app(TransitionAppointmentStatusAction::class)($first, AppointmentStatus::NO_SHOW);
+
+        $second = app(CreateAppointmentAction::class)([
+            'branch_id' => $branch->id,
+            'service_id' => $service->id,
+            'customer_id' => $customer->id,
+            'staff_id' => $staff->id,
+            'start_at' => '2026-06-01T10:30',
+        ]);
+
+        $this->assertInstanceOf(Appointment::class, $second);
+    }
+
     public function test_invalid_status_transition_and_cancel_reason_requirements_are_enforced(): void
     {
         [$branch, $service, $customer, $staff] = $this->seedBase();
@@ -145,6 +198,78 @@ class AppointmentRulesTest extends TestCase
         $this->expectException(ValidationException::class);
 
         app(TransitionAppointmentStatusAction::class)($appointment, AppointmentStatus::CANCELLED);
+    }
+
+    public function test_status_flow_matches_business_rules_and_completed_is_terminal(): void
+    {
+        [$branch, $service, $customer, $staff] = $this->seedBase();
+
+        $appointment = app(CreateAppointmentAction::class)([
+            'branch_id' => $branch->id,
+            'service_id' => $service->id,
+            'customer_id' => $customer->id,
+            'staff_id' => $staff->id,
+            'start_at' => '2026-06-01T10:00',
+        ]);
+
+        $transition = app(TransitionAppointmentStatusAction::class);
+
+        $transition($appointment, AppointmentStatus::CONFIRMED);
+        $transition($appointment, AppointmentStatus::IN_PROGRESS);
+        $transition($appointment, AppointmentStatus::COMPLETED);
+
+        $appointment->refresh();
+        $this->assertSame(AppointmentStatus::COMPLETED, $appointment->status);
+
+        $this->expectException(ValidationException::class);
+        $transition($appointment, AppointmentStatus::CANCELLED, 'Too late');
+    }
+
+    public function test_pending_can_be_cancelled_directly_with_reason(): void
+    {
+        [$branch, $service, $customer, $staff] = $this->seedBase();
+
+        $appointment = app(CreateAppointmentAction::class)([
+            'branch_id' => $branch->id,
+            'service_id' => $service->id,
+            'customer_id' => $customer->id,
+            'staff_id' => $staff->id,
+            'start_at' => '2026-06-01T10:00',
+        ]);
+
+        app(TransitionAppointmentStatusAction::class)(
+            $appointment,
+            AppointmentStatus::CANCELLED,
+            'Customer requested cancellation',
+        );
+
+        $appointment->refresh();
+        $this->assertSame(AppointmentStatus::CANCELLED, $appointment->status);
+    }
+
+    public function test_terminal_appointment_cannot_be_rescheduled_or_reassigned(): void
+    {
+        [$branch, $service, $customer, $staff] = $this->seedBase();
+
+        $appointment = app(CreateAppointmentAction::class)([
+            'branch_id' => $branch->id,
+            'service_id' => $service->id,
+            'customer_id' => $customer->id,
+            'staff_id' => $staff->id,
+            'start_at' => '2026-06-01T10:00',
+        ]);
+
+        app(TransitionAppointmentStatusAction::class)($appointment, AppointmentStatus::CONFIRMED);
+        app(TransitionAppointmentStatusAction::class)($appointment, AppointmentStatus::IN_PROGRESS);
+        app(TransitionAppointmentStatusAction::class)($appointment, AppointmentStatus::COMPLETED);
+
+        $otherStaff = User::factory()->staff($branch)->create();
+
+        $this->expectException(ValidationException::class);
+        app(UpdateAppointmentAction::class)($appointment, [
+            'staff_id' => $otherStaff->id,
+            'start_at' => '2026-06-01T12:00',
+        ]);
     }
 
     /**

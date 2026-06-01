@@ -6,7 +6,7 @@ Backend-first Laravel assessment project for managing branches, services, staff,
 - Laravel 13
 - Filament 5 (admin/staff panel)
 - MySQL (native local setup)
-- PHPUnit feature tests
+- PHPUnit 12 (unit + feature)
 
 ## Quick Setup
 1. Install dependencies:
@@ -21,7 +21,7 @@ DB_HOST=127.0.0.1
 DB_PORT=3306
 DB_DATABASE=booking_system
 DB_USERNAME=root
-DB_PASSWORD=password
+DB_PASSWORD=
 ```
 3. Create database (if needed), then migrate and seed:
 ```bash
@@ -39,7 +39,7 @@ npm run dev
 
 ## Seeded Credentials
 - Admin: `admin@example.com` / `password`
-- Staff: `staff@example.com` / `password`
+- Staff: `staff01@example.com` / `password`
 
 ## Architecture Overview
 - **Thin entrypoints**:
@@ -50,7 +50,6 @@ npm run dev
   - `UpdateAppointmentAction`
   - `TransitionAppointmentStatusAction`
   - `CancelAppointmentAction`
-  - `AssignAvailableStaffAction`
   - `BranchOperatingHoursService`
   - `AppointmentOverlapService`
 - **Authorization**:
@@ -65,10 +64,16 @@ npm run dev
 - `end_at` is derived from `start_at + service.duration_minutes` (never manually entered)
 - Appointment must fully fit branch operating hours (in branch timezone)
 - Staff must belong to appointment branch
-- Overlap is blocked for statuses: `pending`, `confirmed`, `in_progress`, `completed`
+- Overlap is blocked for statuses: `pending`, `confirmed`, `completed`
 - `cancelled` and `no_show` do not block availability
 - `cancelled` requires `cancellation_reason`
 - Status transitions are guarded (no backwards/nonsense transitions)
+- Public booking creates `pending` appointments without auto staff assignment
+- Confirmation (`pending -> confirmed`) requires assigned staff and passes free-slot overlap validation
+
+## Admin UI Notes
+- Resource list pages have a column manager enabled (toggleable columns).
+- Column visibility preferences persist in session per user/page.
 
 ## Timezone Assumptions
 - App timezone baseline is UTC.
@@ -88,14 +93,22 @@ Run:
 php artisan test
 ```
 
-Coverage includes:
+Run unit tests only:
+```bash
+php artisan test --testsuite=Unit
+```
+
+Coverage currently includes:
+- Unit tests:
+  - `AppointmentStatus` transition/blocking/helper behavior
+  - `CustomerPhoneNumberFormState` compose/split/validation behavior (shared by Customer + Branch flows)
 - End-time derivation
 - Operating-hours validation
 - Staff-branch validation
 - Overlap behavior by status
 - Status transition rules + cancellation reason requirement
 - Staff authorization isolation
-- Public booking flow (auto staff assignment + customer reuse + no-availability case)
+- Public booking/customer reuse scenarios
 
 ## AI Tool Usage
 AI-assisted development was used for scaffolding and implementation acceleration.  

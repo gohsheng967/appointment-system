@@ -99,4 +99,33 @@ class StaffAuthorizationTest extends TestCase
 
         $this->assertSame([$apptForA->id], $ids);
     }
+
+    public function test_terminal_appointments_cannot_be_updated(): void
+    {
+        $branch = Branch::factory()->create();
+        $service = Service::factory()->create();
+        $customer = Customer::factory()->create();
+
+        $staff = User::factory()->staff($branch)->create();
+        $admin = User::factory()->admin()->create(['role' => UserRole::ADMIN]);
+
+        $startUtc = branch_local_to_utc('2026-06-01T10:00', $branch->timezone);
+        $terminalStatuses = [AppointmentStatus::COMPLETED, AppointmentStatus::CANCELLED, AppointmentStatus::NO_SHOW];
+
+        foreach ($terminalStatuses as $status) {
+            $appointment = Appointment::query()->create([
+                'branch_id' => $branch->id,
+                'staff_id' => $staff->id,
+                'customer_id' => $customer->id,
+                'service_id' => $service->id,
+                'start_at' => $startUtc,
+                'end_at' => $startUtc->copy()->addMinutes(60),
+                'status' => $status,
+                'cancellation_reason' => $status === AppointmentStatus::CANCELLED ? 'Cancelled' : null,
+            ]);
+
+            $this->assertFalse($admin->can('update', $appointment));
+            $this->assertFalse($staff->can('update', $appointment));
+        }
+    }
 }

@@ -1,0 +1,73 @@
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+
+@source '../../../../app/Filament/**/*';
+@source '../../../../resources/views/filament/**/*';
+
+.fi-ta-actions .fi-disabled,
+.fi-ta-actions [disabled],
+.fi-ta-actions [aria-disabled='true'] {
+    cursor: not-allowed !important;
+    pointer-events: auto !important;
+}
+
+.fi-ta-actions .fi-disabled *,
+.fi-ta-actions [disabled] *,
+.fi-ta-actions [aria-disabled='true'] * {
+    cursor: not-allowed !important;
+}
+
+@media (min-width: 640px) {
+    .fi-ta-content-ctn .fi-ta-table > thead > tr > .fi-ta-actions-header-cell {
+        position: sticky;
+        inset-inline-end: 0;
+        z-index: 20;
+        background-color: rgb(249 250 251);
+    }
+
+    .dark .fi-ta-content-ctn .fi-ta-table > thead > tr > .fi-ta-actions-header-cell {
+        background-color: rgba(255, 255, 255, 0.05);
+    }
+
+    .fi-ta-content-ctn .fi-ta-table > tbody > tr > .fi-ta-cell:has(.fi-ta-actions),
+    .fi-ta-content-ctn .fi-ta-table > tfoot > tr > .fi-ta-cell:has(.fi-ta-actions) {
+        position: sticky;
+        inset-inline-end: 0;
+        z-index: 10;
+        background-color: rgb(255 255 255);
+    }
+
+    .dark .fi-ta-content-ctn .fi-ta-table > tbody > tr > .fi-ta-cell:has(.fi-ta-actions),
+    .dark .fi-ta-content-ctn .fi-ta-table > tfoot > tr > .fi-ta-cell:has(.fi-ta-actions) {
+        background-color: rgb(17 24 39);
+    }
+
+    .fi-ta-content-ctn .fi-ta-table > tbody > tr > .fi-ta-cell:has(.fi-ta-actions)::before,
+    .fi-ta-content-ctn .fi-ta-table > thead > tr > .fi-ta-actions-header-cell::before {
+        content: '';
+        position: absolute;
+        inset-block: 0;
+        inset-inline-start: -10px;
+        width: 10px;
+        background: linear-gradient(to left, transparent, rgba(0, 0, 0, 0.06));
+        pointer-events: none;
+    }
+
+    .dark .fi-ta-content-ctn .fi-ta-table > tbody > tr > .fi-ta-cell:has(.fi-ta-actions)::before,
+    .dark .fi-ta-content-ctn .fi-ta-table > thead > tr > .fi-ta-actions-header-cell::before {
+        background: linear-gradient(to left, transparent, rgba(255, 255, 255, 0.1));
+    }
+}
+
+/* Make active status tabs on list pages more visually obvious. */
+.fi-resource-list-records-page .fi-sc-tabs .fi-tabs-item.fi-active {
+    @apply bg-primary-100 ring-2 ring-primary-300 shadow-xs dark:bg-primary-500/20 dark:ring-primary-400/50;
+}
+
+.fi-resource-list-records-page .fi-sc-tabs .fi-tabs-item.fi-active .fi-tabs-item-label,
+.fi-resource-list-records-page .fi-sc-tabs .fi-tabs-item.fi-active > .fi-icon {
+    @apply font-semibold text-primary-800 dark:text-primary-200;
+}
+
+.fi-resource-list-records-page .fi-sc-tabs .fi-tabs-item.fi-active .fi-badge {
+    @apply ring-1 ring-primary-300/70 dark:ring-primary-400/40;
+}

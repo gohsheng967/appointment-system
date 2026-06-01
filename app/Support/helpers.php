@@ -31,6 +31,29 @@ if (! function_exists('ensure_valid_timezone')) {
     }
 }
 
+if (! function_exists('timezone_utc_offset_label')) {
+    function timezone_utc_offset_label(string $timezone, ?CarbonInterface $at = null): string
+    {
+        ensure_valid_timezone($timezone);
+
+        $local = $at instanceof CarbonInterface
+            ? CarbonImmutable::instance($at)->setTimezone($timezone)
+            : CarbonImmutable::now($timezone);
+
+        $offsetSeconds = $local->getOffset();
+        $sign = $offsetSeconds >= 0 ? '+' : '-';
+        $absolute = abs($offsetSeconds);
+        $hours = intdiv($absolute, 3600);
+        $minutes = intdiv($absolute % 3600, 60);
+
+        if ($minutes === 0) {
+            return sprintf('UTC%s%d', $sign, $hours);
+        }
+
+        return sprintf('UTC%s%d:%02d', $sign, $hours, $minutes);
+    }
+}
+
 if (! function_exists('normalize_phone_number')) {
     function normalize_phone_number(?string $value): ?string
     {

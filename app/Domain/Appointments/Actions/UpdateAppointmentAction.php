@@ -4,6 +4,7 @@ namespace App\Domain\Appointments\Actions;
 
 use App\Domain\Appointments\Services\AppointmentOverlapService;
 use App\Domain\Appointments\Services\BranchOperatingHoursService;
+use App\Domain\Appointments\Services\StaffAvailabilityLockService;
 use App\Enums\AppointmentStatus;
 use App\Enums\UserRole;
 use App\Models\Appointment;
@@ -20,6 +21,7 @@ class UpdateAppointmentAction
         private readonly BranchOperatingHoursService $operatingHoursService,
         private readonly AppointmentOverlapService $overlapService,
         private readonly TransitionAppointmentStatusAction $transitionStatusAction,
+        private readonly StaffAvailabilityLockService $staffLockService,
     ) {}
 
     /**
@@ -30,7 +32,8 @@ class UpdateAppointmentAction
      *   staff_id?: int,
      *   start_at?: string,
      *   status?: string,
-     *   cancellation_reason?: string|null
+     *   cancellation_reason?: string|null,
+     *   auto_confirm_pending?: bool
      * }  $payload
      */
     public function __invoke(Appointment $appointment, array $payload): Appointment
@@ -59,31 +62,44 @@ class UpdateAppointmentAction
                 : $appointment->start_at->toImmutable();
             $endUtc = $startUtc->addMinutes($service->duration_minutes);
 
-            $this->assertStaffIsAssignableToBranch($staff, $branch);
-            $this->operatingHoursService->assertWithinHours($branch, $startUtc, $endUtc);
-            $this->overlapService->assertNoOverlap($staff->id, $startUtc, $endUtc, $appointment->id);
+            $persistUpdate = function () use ($appointment, $payload, $branch, $service, $customer, $staff, $startUtc, $endUtc): Appointment {
+                $this->assertStaffIsAssignableToBranch($staff, $branch);
+                $this->operatingHoursService->assertWithinHours($branch, $startUtc, $endUtc);
+                $this->overlapService->assertNoOverlap($staff->id, $startUtc, $endUtc, $appointment->id);
 
-            $appointment->fill([
-                'branch_id' => $branch->id,
-                'staff_id' => $staff->id,
-                'customer_id' => $customer->id,
-                'service_id' => $service->id,
-                'start_at' => $startUtc,
-                'end_at' => $endUtc,
-            ]);
-            $appointment->save();
+                $appointment->fill([
+                    'branch_id' => $branch->id,
+                    'staff_id' => $staff->id,
+                    'customer_id' => $customer->id,
+                    'service_id' => $service->id,
+                    'start_at' => $startUtc,
+                    'end_at' => $endUtc,
+                ]);
+                $appointment->save();
 
-            if (isset($payload['status'])) {
-                $targetStatus = AppointmentStatus::from($payload['status']);
+                $targetStatusValue = $payload['status'] ?? null;
+                if (
+                    ! isset($targetStatusValue)
+                    && ($payload['auto_confirm_pending'] ?? false)
+                    && $currentStatus === AppointmentStatus::PENDING
+                ) {
+                    $targetStatusValue = AppointmentStatus::CONFIRMED->value;
+                }
 
-                $this->transitionStatusAction->__invoke(
-                    $appointment,
-                    $targetStatus,
-                    $payload['cancellation_reason'] ?? null,
-                );
-            }
+                if (isset($targetStatusValue)) {
+                    $targetStatus = AppointmentStatus::from($targetStatusValue);
 
-            return $appointment->refresh();
+                    $this->transitionStatusAction->__invoke(
+                        $appointment,
+                        $targetStatus,
+                        $payload['cancellation_reason'] ?? null,
+                    );
+                }
+
+                return $appointment->refresh();
+            };
+
+            return $this->staffLockService->forStaff($staff->id, $persistUpdate);
         });
     }
 

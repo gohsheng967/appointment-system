@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Appointments;
 
+use App\Enums\AppointmentStatus;
 use App\Filament\Resources\Appointments\Pages\CreateAppointment;
 use App\Filament\Resources\Appointments\Pages\EditAppointment;
 use App\Filament\Resources\Appointments\Pages\ListAppointments;
@@ -68,17 +69,11 @@ class AppointmentResource extends Resource
 
     public static function canEdit(Model $record): bool
     {
-        $user = auth()->user();
-
-        if (! $user) {
+        if ($record->status instanceof AppointmentStatus && $record->status->isTerminal()) {
             return false;
         }
 
-        if ($user->isAdmin()) {
-            return true;
-        }
-
-        return $user->isStaff() && (int) $record->staff_id === (int) $user->id;
+        return auth()->user()?->isAdmin() ?? false;
     }
 
     public static function canDelete(Model $record): bool

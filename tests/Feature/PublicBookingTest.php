@@ -16,7 +16,7 @@ class PublicBookingTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_public_booking_creates_appointment_and_auto_assigns_staff(): void
+    public function test_public_booking_creates_pending_appointment_without_auto_assigning_staff(): void
     {
         $branch = Branch::factory()->create([
             'timezone' => 'Asia/Kuala_Lumpur',
@@ -24,27 +24,32 @@ class PublicBookingTest extends TestCase
             'closing_time' => '18:00:00',
         ]);
         $service = Service::factory()->create(['duration_minutes' => 60]);
-        $staff = User::factory()->staff($branch)->create(['role' => UserRole::STAFF]);
+        User::factory()->staff($branch)->create(['role' => UserRole::STAFF]);
 
         $response = $this->post(route('booking.store'), [
             'name' => 'Public Customer',
             'email' => 'public@example.com',
-            'phone' => '',
             'branch_id' => $branch->id,
             'service_id' => $service->id,
             'start_at' => '2026-06-01T10:00',
         ]);
 
         $response->assertRedirect(route('booking.success'));
-        $response->assertSessionHas('booking_reference');
+        $response->assertSessionHas('booking_reference', static function (?string $reference): bool {
+            if (! is_string($reference)) {
+                return false;
+            }
+
+            return preg_match('/^APT-\d+-\d{6}$/', $reference) === 1;
+        });
 
         $appointment = Appointment::query()->first();
         $this->assertNotNull($appointment);
-        $this->assertSame($staff->id, $appointment->staff_id);
+        $this->assertNull($appointment->staff_id);
         $this->assertSame(AppointmentStatus::PENDING, $appointment->status);
     }
 
-    public function test_customer_is_reused_by_email_or_phone(): void
+    public function test_customer_is_reused_by_email_or_phone_number(): void
     {
         $branch = Branch::factory()->create([
             'timezone' => 'Asia/Kuala_Lumpur',
@@ -57,7 +62,8 @@ class PublicBookingTest extends TestCase
         $payload = [
             'name' => 'Repeat Customer',
             'email' => 'repeat@example.com',
-            'phone' => '+60112223333',
+            'phone_country_code' => '+60',
+            'phone_number' => '112223333',
             'branch_id' => $branch->id,
             'service_id' => $service->id,
         ];
@@ -69,7 +75,7 @@ class PublicBookingTest extends TestCase
         $this->assertDatabaseCount('appointments', 2);
     }
 
-    public function test_booking_fails_when_no_staff_is_available(): void
+    public function test_public_booking_still_creates_when_staff_are_busy_because_assignment_happens_later(): void
     {
         $branch = Branch::factory()->create([
             'timezone' => 'Asia/Kuala_Lumpur',
@@ -94,13 +100,17 @@ class PublicBookingTest extends TestCase
         $response = $this->from(route('booking.create'))->post(route('booking.store'), [
             'name' => 'Blocked Customer',
             'email' => 'blocked@example.com',
-            'phone' => '',
             'branch_id' => $branch->id,
             'service_id' => $service->id,
             'start_at' => '2026-06-01T10:00',
         ]);
 
-        $response->assertRedirect(route('booking.create'));
-        $response->assertSessionHasErrors(['start_at']);
+        $response->assertRedirect(route('booking.success'));
+        $this->assertDatabaseCount('appointments', 2);
+
+        $newAppointment = Appointment::query()->latest('id')->first();
+        $this->assertNotNull($newAppointment);
+        $this->assertNull($newAppointment->staff_id);
+        $this->assertSame(AppointmentStatus::PENDING, $newAppointment->status);
     }
 }

@@ -18,22 +18,34 @@ class ServicesTable
             ->columns([
                 TextColumn::make('name')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('duration_minutes')
-                    ->sortable(),
-                ImageColumn::make('image'),
+                    ->sortable()
+                    ->toggleable(),
+                ImageColumn::make('image')
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('price')
                     ->money('USD')
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('updated_at')
                     ->dateTime()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->columnManagerColumns(2)
+            ->persistColumnsInSession()
             ->filters([
             ])
             ->recordActions([
-                ViewAction::make(),
-                EditAction::make(),
+                ViewAction::make()
+                    ->color('success')
+                    ->iconButton()
+                    ->tooltip('View'),
+                EditAction::make()
+                    ->iconButton()
+                    ->tooltip('Edit'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

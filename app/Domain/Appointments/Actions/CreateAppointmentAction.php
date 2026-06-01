@@ -4,6 +4,7 @@ namespace App\Domain\Appointments\Actions;
 
 use App\Domain\Appointments\Services\AppointmentOverlapService;
 use App\Domain\Appointments\Services\BranchOperatingHoursService;
+use App\Domain\Appointments\Services\StaffAvailabilityLockService;
 use App\Enums\AppointmentStatus;
 use App\Enums\UserRole;
 use App\Models\Appointment;
@@ -19,7 +20,7 @@ class CreateAppointmentAction
     public function __construct(
         private readonly BranchOperatingHoursService $operatingHoursService,
         private readonly AppointmentOverlapService $overlapService,
-        private readonly AssignAvailableStaffAction $assignAvailableStaffAction,
+        private readonly StaffAvailabilityLockService $staffLockService,
     ) {}
 
     /**
@@ -44,23 +45,33 @@ class CreateAppointmentAction
 
         $staff = isset($payload['staff_id']) && $payload['staff_id']
             ? User::query()->findOrFail($payload['staff_id'])
-            : ($this->assignAvailableStaffAction)($branch, $startUtc, $endUtc);
+            : null;
 
-        $this->assertStaffIsAssignableToBranch($staff, $branch);
-        $this->overlapService->assertNoOverlap($staff->id, $startUtc, $endUtc);
+        $createAppointment = function () use ($branch, $service, $customer, $staff, $startUtc, $endUtc): Appointment {
+            if ($staff) {
+                $this->assertStaffIsAssignableToBranch($staff, $branch);
+                $this->overlapService->assertNoOverlap($staff->id, $startUtc, $endUtc);
+            }
 
-        return DB::transaction(function () use ($branch, $service, $customer, $staff, $startUtc, $endUtc): Appointment {
-            return Appointment::query()->create([
-                'branch_id' => $branch->id,
-                'staff_id' => $staff->id,
-                'customer_id' => $customer->id,
-                'service_id' => $service->id,
-                'start_at' => $startUtc,
-                'end_at' => $endUtc,
-                'status' => AppointmentStatus::PENDING,
-                'cancellation_reason' => null,
-            ]);
-        });
+            return DB::transaction(function () use ($branch, $service, $customer, $staff, $startUtc, $endUtc): Appointment {
+                return Appointment::query()->create([
+                    'branch_id' => $branch->id,
+                    'staff_id' => $staff?->id,
+                    'customer_id' => $customer->id,
+                    'service_id' => $service->id,
+                    'start_at' => $startUtc,
+                    'end_at' => $endUtc,
+                    'status' => AppointmentStatus::PENDING,
+                    'cancellation_reason' => null,
+                ]);
+            });
+        };
+
+        if (! $staff) {
+            return $createAppointment();
+        }
+
+        return $this->staffLockService->forStaff($staff->id, $createAppointment);
     }
 
     private function assertStaffIsAssignableToBranch(User $staff, Branch $branch): void

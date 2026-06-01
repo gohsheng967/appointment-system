@@ -17,25 +17,38 @@ class BranchesTable
             ->columns([
                 TextColumn::make('name')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('timezone')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('opening_time')
-                    ->label('Open'),
+                    ->label('Open')
+                    ->toggleable(),
                 TextColumn::make('closing_time')
-                    ->label('Close'),
-                TextColumn::make('phone')
-                    ->searchable(),
+                    ->label('Close')
+                    ->toggleable(),
+                TextColumn::make('phone_number')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('updated_at')
                     ->dateTime()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->columnManagerColumns(2)
+            ->persistColumnsInSession()
             ->filters([
             ])
             ->recordActions([
-                ViewAction::make(),
-                EditAction::make(),
+                ViewAction::make()
+                    ->color('success')
+                    ->iconButton()
+                    ->tooltip('View'),
+                EditAction::make()
+                    ->iconButton()
+                    ->tooltip('Edit'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([
@@ -44,3 +57,4 @@ class BranchesTable
             ]);
     }
 }
+

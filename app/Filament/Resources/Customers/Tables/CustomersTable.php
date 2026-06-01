@@ -2,13 +2,9 @@
 
 namespace App\Filament\Resources\Customers\Tables;
 
-use Filament\Actions\BulkActionGroup;
-use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
-use Filament\Forms\Components\TextInput;
 use Filament\Tables\Columns\TextColumn;
-use Filament\Tables\Filters\Filter;
 use Filament\Tables\Table;
 
 class CustomersTable
@@ -19,39 +15,31 @@ class CustomersTable
             ->columns([
                 TextColumn::make('name')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('email')
-                    ->searchable(),
-                TextColumn::make('phone')
-                    ->searchable(),
+                    ->searchable()
+                    ->toggleable(),
+                TextColumn::make('phone_number')
+                    ->searchable()
+                    ->toggleable(isToggledHiddenByDefault: true),
                 TextColumn::make('updated_at')
                     ->dateTime()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
-            ->filters([
-                Filter::make('contactable')
-                    ->schema([
-                        TextInput::make('has_contact')
-                            ->placeholder('Type yes to show contactable customers'),
-                    ])
-                    ->query(function ($query, array $data) {
-                        if (($data['has_contact'] ?? null) !== 'yes') {
-                            return $query;
-                        }
-
-                        return $query->where(function ($inner): void {
-                            $inner->whereNotNull('email')->orWhereNotNull('phone');
-                        });
-                    }),
-            ])
+            ->columnManagerColumns(2)
+            ->persistColumnsInSession()
+            ->filters([])
             ->recordActions([
-                ViewAction::make(),
-                EditAction::make(),
+                ViewAction::make()
+                    ->color('success')
+                    ->iconButton()
+                    ->tooltip('View'),
+                EditAction::make()
+                    ->iconButton()
+                    ->tooltip('Edit'),
             ])
-            ->toolbarActions([
-                BulkActionGroup::make([
-                    DeleteBulkAction::make(),
-                ]),
-            ]);
+            ->toolbarActions([]);
     }
 }

@@ -14,8 +14,12 @@ class EditService extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            ViewAction::make(),
-            DeleteAction::make(),
+            ViewAction::make()->color('success'),
+            DeleteAction::make()
+                ->disabled(fn (): bool => $this->record->hasActiveAppointments())
+                ->tooltip(fn (): ?string => $this->record->hasActiveAppointments()
+                    ? 'Cannot delete service with active appointments (Confirmed or In Progress).'
+                    : null),
         ];
     }
 }

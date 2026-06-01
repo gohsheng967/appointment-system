@@ -28,7 +28,7 @@ class BookingController extends Controller
         $customer = $findOrCreateCustomer([
             'name' => $request->string('name')->toString(),
             'email' => $request->input('email'),
-            'phone' => $request->input('phone'),
+            'phone_number' => $request->input('phone_number'),
         ]);
 
         $appointment = $createAppointmentAction([
@@ -40,7 +40,7 @@ class BookingController extends Controller
 
         return redirect()
             ->route('booking.success')
-            ->with('booking_reference', 'APT-'.str_pad((string) $appointment->id, 6, '0', STR_PAD_LEFT));
+            ->with('booking_reference', $appointment->booking_reference);
     }
 
     public function success(): View|RedirectResponse

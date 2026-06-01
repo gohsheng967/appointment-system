@@ -2,25 +2,30 @@
 
 namespace App\Models;
 
+use App\Enums\AppointmentStatus;
 use App\Enums\UserRole;
+use App\Models\Concerns\HasUuidRouteKey;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Validation\ValidationException;
 
 class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasFactory, Notifiable, HasUuidRouteKey, SoftDeletes;
 
     /**
      * @var list<string>
      */
     protected $fillable = [
+        'uuid',
         'name',
         'email',
         'password',
@@ -45,9 +50,21 @@ class User extends Authenticatable implements FilamentUser
     {
         return [
             'email_verified_at' => 'datetime',
+            'deleted_at' => 'datetime',
             'password' => 'hashed',
             'role' => UserRole::class,
         ];
+    }
+
+    protected static function booted(): void
+    {
+        static::deleting(function (self $user): void {
+            if ($user->hasActiveAppointments()) {
+                throw ValidationException::withMessages([
+                    'user' => ['Cannot delete user while they have active appointments (Confirmed or In Progress).'],
+                ]);
+            }
+        });
     }
 
     /**
@@ -64,6 +81,16 @@ class User extends Authenticatable implements FilamentUser
     public function appointments(): HasMany
     {
         return $this->hasMany(Appointment::class, 'staff_id');
+    }
+
+    public function hasActiveAppointments(): bool
+    {
+        return $this->appointments()
+            ->whereIn('status', [
+                AppointmentStatus::CONFIRMED->value,
+                AppointmentStatus::IN_PROGRESS->value,
+            ])
+            ->exists();
     }
 
     public function isAdmin(): bool

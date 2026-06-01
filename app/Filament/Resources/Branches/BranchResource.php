@@ -60,7 +60,9 @@ class BranchResource extends Resource
 
     public static function canDelete(Model $record): bool
     {
-        return auth()->user()?->isAdmin() ?? false;
+        return (auth()->user()?->isAdmin() ?? false)
+            && $record instanceof Branch
+            && ! $record->hasActiveAppointments();
     }
 
     public static function getPages(): array

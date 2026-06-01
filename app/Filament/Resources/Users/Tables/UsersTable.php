@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources\Users\Tables;
 
+use App\Enums\UserRole;
 use Filament\Actions\BulkActionGroup;
 use Filament\Actions\DeleteBulkAction;
 use Filament\Actions\EditAction;
@@ -18,26 +19,39 @@ class UsersTable
             ->columns([
                 TextColumn::make('name')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('email')
                     ->searchable()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('role')
-                    ->sortable(),
+                    ->formatStateUsing(static fn (UserRole|string|null $state): string => UserRole::labelFor($state))
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('branch.name')
                     ->label('Branch')
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(),
                 TextColumn::make('updated_at')
                     ->dateTime()
-                    ->sortable(),
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: true),
             ])
+            ->columnManagerColumns(2)
+            ->persistColumnsInSession()
             ->filters([
                 SelectFilter::make('branch')
                     ->relationship('branch', 'name'),
             ])
             ->recordActions([
-                ViewAction::make(),
-                EditAction::make(),
+                ViewAction::make()
+                    ->color('success')
+                    ->iconButton()
+                    ->tooltip('View'),
+                EditAction::make()
+                    ->iconButton()
+                    ->tooltip('Edit'),
             ])
             ->toolbarActions([
                 BulkActionGroup::make([

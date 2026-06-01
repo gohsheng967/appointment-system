@@ -16,7 +16,8 @@ class BranchInfolist
                 TextEntry::make('opening_time'),
                 TextEntry::make('closing_time'),
                 TextEntry::make('address'),
-                TextEntry::make('phone'),
+                TextEntry::make('phone_number'),
             ]);
     }
 }
+

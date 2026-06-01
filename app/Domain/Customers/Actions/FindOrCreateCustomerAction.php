@@ -9,13 +9,13 @@ class FindOrCreateCustomerAction
     public function __invoke(array $attributes): Customer
     {
         $email = isset($attributes['email']) ? trim((string) $attributes['email']) : null;
-        $phone = normalize_phone_number($attributes['phone'] ?? null);
+        $phoneNumber = normalize_phone_number($attributes['phone_number'] ?? null);
 
-        if (! $email && ! $phone) {
+        if (! $email && ! $phoneNumber) {
             return Customer::create([
                 'name' => $attributes['name'],
                 'email' => null,
-                'phone' => null,
+                'phone_number' => null,
             ]);
         }
 
@@ -25,8 +25,8 @@ class FindOrCreateCustomerAction
             $query->orWhere('email', $email);
         }
 
-        if ($phone) {
-            $query->orWhere('phone', $phone);
+        if ($phoneNumber) {
+            $query->orWhere('phone_number', $phoneNumber);
         }
 
         $customer = $query->first();
@@ -35,7 +35,7 @@ class FindOrCreateCustomerAction
             $customer->fill([
                 'name' => $attributes['name'],
                 'email' => $email ?: $customer->email,
-                'phone' => $phone ?: $customer->phone,
+                'phone_number' => $phoneNumber ?: $customer->phone_number,
             ])->save();
 
             return $customer;
@@ -44,7 +44,7 @@ class FindOrCreateCustomerAction
         return Customer::create([
             'name' => $attributes['name'],
             'email' => $email,
-            'phone' => $phone,
+            'phone_number' => $phoneNumber,
         ]);
     }
 }

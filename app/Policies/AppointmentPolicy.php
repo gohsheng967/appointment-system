@@ -41,6 +41,10 @@ class AppointmentPolicy
      */
     public function update(User $user, Appointment $appointment): bool
     {
+        if ($appointment->status->isTerminal()) {
+            return false;
+        }
+
         if ($user->isAdmin()) {
             return true;
         }

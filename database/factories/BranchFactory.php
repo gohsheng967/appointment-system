@@ -23,7 +23,7 @@ class BranchFactory extends Factory
             'opening_time' => '09:00:00',
             'closing_time' => '18:00:00',
             'address' => fake()->address(),
-            'phone' => '+60'.fake()->numerify('1########'),
+            'phone_number' => '+60'.fake()->numerify('1########'),
         ];
     }
 }

@@ -2,7 +2,6 @@
 
 namespace App\Filament\Resources\Users;
 
-use App\Enums\UserRole;
 use App\Filament\Resources\Users\Pages\CreateUser;
 use App\Filament\Resources\Users\Pages\EditUser;
 use App\Filament\Resources\Users\Pages\ListUsers;
@@ -25,9 +24,9 @@ class UserResource extends Resource
 
     protected static string|BackedEnum|null $navigationIcon = Heroicon::OutlinedUsers;
 
-    protected static ?string $modelLabel = 'Staff';
+    protected static ?string $modelLabel = 'User';
 
-    protected static ?string $pluralModelLabel = 'Staff';
+    protected static ?string $pluralModelLabel = 'Users';
 
     public static function form(Schema $schema): Schema
     {
@@ -51,7 +50,7 @@ class UserResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        return parent::getEloquentQuery()->where('role', UserRole::STAFF->value);
+        return parent::getEloquentQuery();
     }
 
     public static function canViewAny(): bool
@@ -71,7 +70,9 @@ class UserResource extends Resource
 
     public static function canDelete(Model $record): bool
     {
-        return auth()->user()?->isAdmin() ?? false;
+        return (auth()->user()?->isAdmin() ?? false)
+            && $record instanceof User
+            && ! $record->hasActiveAppointments();
     }
 
     public static function getPages(): array

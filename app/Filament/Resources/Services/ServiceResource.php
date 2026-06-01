@@ -60,7 +60,9 @@ class ServiceResource extends Resource
 
     public static function canDelete(Model $record): bool
     {
-        return auth()->user()?->isAdmin() ?? false;
+        return (auth()->user()?->isAdmin() ?? false)
+            && $record instanceof Service
+            && ! $record->hasActiveAppointments();
     }
 
     public static function getPages(): array
