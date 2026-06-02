@@ -11,13 +11,21 @@ class EditService extends EditRecord
 {
     protected static string $resource = ServiceResource::class;
 
+    protected function getSavedNotificationTitle(): ?string
+    {
+        return 'Service updated successfully.';
+    }
+
     protected function getHeaderActions(): array
     {
+        $hasActiveAppointments = $this->record->hasActiveAppointments();
+
         return [
             ViewAction::make()->color('success'),
             DeleteAction::make()
-                ->disabled(fn (): bool => $this->record->hasActiveAppointments())
-                ->tooltip(fn (): ?string => $this->record->hasActiveAppointments()
+                ->disabled($hasActiveAppointments)
+                ->successNotificationTitle('Service deleted successfully.')
+                ->tooltip($hasActiveAppointments
                     ? 'Cannot delete service with active appointments (Confirmed or In Progress).'
                     : null),
         ];

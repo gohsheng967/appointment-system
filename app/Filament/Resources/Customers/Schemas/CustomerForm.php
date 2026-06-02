@@ -19,6 +19,7 @@ class CustomerForm
                 TextInput::make('email')
                     ->nullable()
                     ->email()
+                    ->rule('required_without:phone_number')
                     ->maxLength(255),
                 Select::make('phone_country_code')
                     ->label('Country Code')
@@ -29,6 +30,7 @@ class CustomerForm
                     ->dehydrated(false),
                 TextInput::make('phone_number')
                     ->nullable()
+                    ->rule('required_without:email')
                     ->maxLength(20)
                     ->helperText('Enter number without country code, e.g. 123456789')
                     ->tel(),

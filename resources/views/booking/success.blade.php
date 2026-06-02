@@ -8,9 +8,9 @@
 </head>
 <body class="min-h-screen bg-gray-100 py-10">
 <main class="mx-auto w-full max-w-xl rounded-2xl border border-gray-200 bg-white p-8 text-center shadow-sm">
-    <h1 class="text-2xl font-semibold text-gray-900">Booking Submitted</h1>
+    <h1 class="text-2xl font-semibold text-gray-900">{{ $title }}</h1>
     <p class="mt-3 text-gray-700">
-        Your appointment request has been received.
+        {{ $message }}
     </p>
     <p class="mt-2 text-sm text-gray-600">
         Reference: <span class="font-semibold text-gray-900">{{ $reference }}</span>

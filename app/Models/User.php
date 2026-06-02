@@ -2,9 +2,10 @@
 
 namespace App\Models;
 
-use App\Enums\AppointmentStatus;
 use App\Enums\UserRole;
+use App\Models\Concerns\HasActiveAppointments;
 use App\Models\Concerns\HasUuidRouteKey;
+use App\Models\Concerns\PreventsDeletionWithActiveAppointments;
 use Database\Factories\UserFactory;
 use Filament\Models\Contracts\FilamentUser;
 use Filament\Panel;
@@ -14,12 +15,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Validation\ValidationException;
 
 class User extends Authenticatable implements FilamentUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, HasUuidRouteKey, SoftDeletes;
+    use HasActiveAppointments, HasFactory, Notifiable, HasUuidRouteKey, PreventsDeletionWithActiveAppointments, SoftDeletes;
 
     /**
      * @var list<string>
@@ -56,17 +56,6 @@ class User extends Authenticatable implements FilamentUser
         ];
     }
 
-    protected static function booted(): void
-    {
-        static::deleting(function (self $user): void {
-            if ($user->hasActiveAppointments()) {
-                throw ValidationException::withMessages([
-                    'user' => ['Cannot delete user while they have active appointments (Confirmed or In Progress).'],
-                ]);
-            }
-        });
-    }
-
     /**
      * @return BelongsTo<Branch, $this>
      */
@@ -83,14 +72,14 @@ class User extends Authenticatable implements FilamentUser
         return $this->hasMany(Appointment::class, 'staff_id');
     }
 
-    public function hasActiveAppointments(): bool
+    protected function activeAppointmentsDeletionMessage(): string
     {
-        return $this->appointments()
-            ->whereIn('status', [
-                AppointmentStatus::CONFIRMED->value,
-                AppointmentStatus::IN_PROGRESS->value,
-            ])
-            ->exists();
+        return 'Cannot delete user while they have active appointments (Confirmed or In Progress).';
+    }
+
+    protected function activeAppointmentsDeletionValidationKey(): string
+    {
+        return 'user';
     }
 
     public function isAdmin(): bool

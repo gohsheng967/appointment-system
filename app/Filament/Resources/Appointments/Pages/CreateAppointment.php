@@ -11,6 +11,11 @@ class CreateAppointment extends CreateRecord
 {
     protected static string $resource = AppointmentResource::class;
 
+    protected function getCreatedNotificationTitle(): ?string
+    {
+        return 'Appointment created successfully.';
+    }
+
     protected function handleRecordCreation(array $data): Model
     {
         return app(CreateAppointmentAction::class)([

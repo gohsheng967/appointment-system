@@ -62,6 +62,41 @@ class StaffAuthorizationTest extends TestCase
         $this->assertTrue($admin->can('update', $apptForB));
     }
 
+    public function test_policy_specific_appointment_abilities_match_ui_permissions(): void
+    {
+        $branch = Branch::factory()->create();
+        $service = Service::factory()->create();
+        $customer = Customer::factory()->create();
+
+        $staff = User::factory()->staff($branch)->create(['role' => UserRole::STAFF]);
+        $otherStaff = User::factory()->staff($branch)->create(['role' => UserRole::STAFF]);
+        $admin = User::factory()->admin()->create(['role' => UserRole::ADMIN]);
+
+        $startUtc = branch_local_to_utc('2026-06-01T10:00', $branch->timezone);
+
+        $appointment = Appointment::query()->create([
+            'branch_id' => $branch->id,
+            'staff_id' => $staff->id,
+            'customer_id' => $customer->id,
+            'service_id' => $service->id,
+            'start_at' => $startUtc,
+            'end_at' => $startUtc->copy()->addMinutes(60),
+            'status' => AppointmentStatus::PENDING,
+        ]);
+
+        $this->assertTrue($staff->can('transitionStatus', $appointment));
+        $this->assertFalse($staff->can('editScheduling', $appointment));
+        $this->assertFalse($staff->can('reassignStaff', $appointment));
+
+        $this->assertFalse($otherStaff->can('transitionStatus', $appointment));
+        $this->assertFalse($otherStaff->can('editScheduling', $appointment));
+        $this->assertFalse($otherStaff->can('reassignStaff', $appointment));
+
+        $this->assertTrue($admin->can('transitionStatus', $appointment));
+        $this->assertTrue($admin->can('editScheduling', $appointment));
+        $this->assertTrue($admin->can('reassignStaff', $appointment));
+    }
+
     public function test_staff_listing_scope_only_returns_own_appointments(): void
     {
         $branch = Branch::factory()->create();
@@ -126,6 +161,34 @@ class StaffAuthorizationTest extends TestCase
 
             $this->assertFalse($admin->can('update', $appointment));
             $this->assertFalse($staff->can('update', $appointment));
+            $this->assertFalse($admin->can('editScheduling', $appointment));
         }
+    }
+
+    public function test_resource_edit_permission_follows_edit_scheduling_policy(): void
+    {
+        $branch = Branch::factory()->create();
+        $service = Service::factory()->create();
+        $customer = Customer::factory()->create();
+
+        $staff = User::factory()->staff($branch)->create();
+        $admin = User::factory()->admin()->create(['role' => UserRole::ADMIN]);
+
+        $startUtc = branch_local_to_utc('2026-06-01T10:00', $branch->timezone);
+        $appointment = Appointment::query()->create([
+            'branch_id' => $branch->id,
+            'staff_id' => $staff->id,
+            'customer_id' => $customer->id,
+            'service_id' => $service->id,
+            'start_at' => $startUtc,
+            'end_at' => $startUtc->copy()->addMinutes(60),
+            'status' => AppointmentStatus::CONFIRMED,
+        ]);
+
+        $this->actingAs($staff);
+        $this->assertFalse(AppointmentResource::canEdit($appointment));
+
+        $this->actingAs($admin);
+        $this->assertTrue(AppointmentResource::canEdit($appointment));
     }
 }

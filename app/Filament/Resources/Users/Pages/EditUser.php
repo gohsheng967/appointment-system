@@ -14,6 +14,11 @@ class EditUser extends EditRecord
 {
     protected static string $resource = UserResource::class;
 
+    protected function getSavedNotificationTitle(): ?string
+    {
+        return 'User updated successfully.';
+    }
+
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
         if (! $record instanceof User) {
@@ -25,12 +30,15 @@ class EditUser extends EditRecord
 
     protected function getHeaderActions(): array
     {
+        $hasActiveAppointments = $this->record->hasActiveAppointments();
+
         return [
             ViewAction::make()->color('success'),
             DeleteAction::make()
                 ->visible(fn (): bool => auth()->user()?->isAdmin() ?? false)
-                ->disabled(fn (): bool => $this->record->hasActiveAppointments())
-                ->tooltip(fn (): ?string => $this->record->hasActiveAppointments()
+                ->disabled($hasActiveAppointments)
+                ->successNotificationTitle('User deleted successfully.')
+                ->tooltip($hasActiveAppointments
                     ? 'Cannot delete user with active appointments (Confirmed or In Progress).'
                     : null),
         ];

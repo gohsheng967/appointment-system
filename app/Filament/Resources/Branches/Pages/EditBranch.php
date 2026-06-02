@@ -3,7 +3,7 @@
 namespace App\Filament\Resources\Branches\Pages;
 
 use App\Filament\Resources\Branches\BranchResource;
-use App\Support\CustomerPhoneNumberFormState;
+use App\Support\PhoneNumberFormDataService;
 use Filament\Actions\DeleteAction;
 use Filament\Actions\ViewAction;
 use Filament\Resources\Pages\EditRecord;
@@ -12,18 +12,18 @@ class EditBranch extends EditRecord
 {
     protected static string $resource = BranchResource::class;
 
+    protected function getSavedNotificationTitle(): ?string
+    {
+        return 'Branch updated successfully.';
+    }
+
     /**
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     protected function mutateFormDataBeforeFill(array $data): array
     {
-        $phoneParts = CustomerPhoneNumberFormState::splitForForm($data['phone_number'] ?? null);
-
-        $data['phone_country_code'] = $phoneParts['phone_country_code'];
-        $data['phone_number'] = $phoneParts['phone_number'];
-
-        return $data;
+        return app(PhoneNumberFormDataService::class)->prepareForFill($data);
     }
 
     /**
@@ -32,23 +32,19 @@ class EditBranch extends EditRecord
      */
     protected function mutateFormDataBeforeSave(array $data): array
     {
-        $data['phone_number'] = CustomerPhoneNumberFormState::composeForStorage(
-            $data['phone_country_code'] ?? CustomerPhoneNumberFormState::DEFAULT_COUNTRY_CODE,
-            $data['phone_number'] ?? null,
-        );
-
-        unset($data['phone_country_code']);
-
-        return $data;
+        return app(PhoneNumberFormDataService::class)->prepareForSave($data);
     }
 
     protected function getHeaderActions(): array
     {
+        $hasActiveAppointments = $this->record->hasActiveAppointments();
+
         return [
             ViewAction::make()->color('success'),
             DeleteAction::make()
-                ->disabled(fn (): bool => $this->record->hasActiveAppointments())
-                ->tooltip(fn (): ?string => $this->record->hasActiveAppointments()
+                ->disabled($hasActiveAppointments)
+                ->successNotificationTitle('Branch deleted successfully.')
+                ->tooltip($hasActiveAppointments
                     ? 'Cannot delete branch with active appointments (Confirmed or In Progress).'
                     : null),
         ];

@@ -88,9 +88,26 @@ enum AppointmentStatus: string
         ];
     }
 
+    /**
+     * @return list<self>
+     */
+    public static function ongoingStatuses(): array
+    {
+        return [
+            self::PENDING,
+            self::CONFIRMED,
+            self::IN_PROGRESS,
+        ];
+    }
+
     public function blocksAvailability(): bool
     {
         return in_array($this, self::blockingStatuses(), true);
+    }
+
+    public function isOngoing(): bool
+    {
+        return in_array($this, self::ongoingStatuses(), true);
     }
 
     public function isTerminal(): bool

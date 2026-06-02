@@ -7,6 +7,7 @@ use App\Domain\Customers\Actions\FindOrCreateCustomerAction;
 use App\Http\Requests\PublicBookingRequest;
 use App\Models\Branch;
 use App\Models\Service;
+use App\Support\SubmissionFeedback;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
 
@@ -52,6 +53,8 @@ class BookingController extends Controller
         }
 
         return view('booking.success', [
+            'title' => SubmissionFeedback::successTitle(),
+            'message' => SubmissionFeedback::bookingSuccessBody(),
             'reference' => $reference,
         ]);
     }

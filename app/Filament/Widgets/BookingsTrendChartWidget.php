@@ -2,22 +2,23 @@
 
 namespace App\Filament\Widgets;
 
-use App\Enums\UserRole;
-use App\Models\Appointment;
-use Filament\Widgets\ChartWidget;
+use App\Filament\Support\AppointmentDashboardScope;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 
-class BookingsTrendChartWidget extends ChartWidget
+class BookingsTrendChartWidget extends DashboardChartWidget
 {
-    protected ?string $heading = 'Bookings Last 7 Days';
-
     protected int|string|array $columnSpan = [
         'md' => 1,
         'xl' => 1,
     ];
 
     protected ?string $pollingInterval = null;
+
+    public function getHeading(): string
+    {
+        return app(AppointmentDashboardScope::class)->trendHeading(auth()->user());
+    }
 
     protected function getData(): array
     {
@@ -33,16 +34,13 @@ class BookingsTrendChartWidget extends ChartWidget
             $start = Carbon::today('UTC')->subDays(6);
             $end = Carbon::tomorrow('UTC');
 
-            $query = Appointment::query()
+            $query = app(AppointmentDashboardScope::class)
+                ->appointmentsQuery($user)
                 ->where('start_at', '>=', $start)
                 ->where('start_at', '<', $end)
                 ->selectRaw('DATE(start_at) as day, COUNT(*) as aggregate')
                 ->groupBy('day')
                 ->orderBy('day');
-
-            if ($user?->role === UserRole::STAFF) {
-                $query->where('staff_id', $user->id);
-            }
 
             return $query
                 ->pluck('aggregate', 'day')
@@ -77,4 +75,3 @@ class BookingsTrendChartWidget extends ChartWidget
         return 'line';
     }
 }
-

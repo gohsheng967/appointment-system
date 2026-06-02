@@ -18,7 +18,7 @@ class TransitionAppointmentStatusAction
     public function __invoke(
         Appointment $appointment,
         AppointmentStatus $targetStatus,
-        ?string $cancellationReason = null,
+        ?string $remark = null,
     ): Appointment {
         /** @var AppointmentStatus $currentStatus */
         $currentStatus = $appointment->status;
@@ -29,13 +29,13 @@ class TransitionAppointmentStatusAction
             ]);
         }
 
-        if ($targetStatus === AppointmentStatus::CANCELLED && blank($cancellationReason)) {
+        if ($targetStatus === AppointmentStatus::CANCELLED && blank($remark)) {
             throw ValidationException::withMessages([
-                'cancellation_reason' => ['A cancellation reason is required when cancelling an appointment.'],
+                'remark' => ['A remark is required when cancelling an appointment.'],
             ]);
         }
 
-        $transition = function () use ($appointment, $targetStatus, $cancellationReason): Appointment {
+        $transition = function () use ($appointment, $targetStatus, $remark): Appointment {
             if ($targetStatus === AppointmentStatus::CONFIRMED) {
                 $this->overlapService->assertNoOverlap(
                     (int) $appointment->staff_id,
@@ -47,7 +47,7 @@ class TransitionAppointmentStatusAction
 
             $appointment->status = $targetStatus;
             $appointment->cancellation_reason = $targetStatus === AppointmentStatus::CANCELLED
-                ? trim((string) $cancellationReason)
+                ? trim((string) $remark)
                 : null;
             $appointment->save();
 

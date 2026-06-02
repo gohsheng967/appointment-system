@@ -2,13 +2,18 @@
 
 namespace App\Filament\Resources\Customers\Pages;
 
+use App\Domain\Customers\Services\CustomerFormDataService;
 use App\Filament\Resources\Customers\CustomerResource;
-use App\Support\CustomerPhoneNumberFormState;
 use Filament\Resources\Pages\CreateRecord;
 
 class CreateCustomer extends CreateRecord
 {
     protected static string $resource = CustomerResource::class;
+
+    protected function getCreatedNotificationTitle(): ?string
+    {
+        return 'Customer created successfully.';
+    }
 
     /**
      * @param  array<string, mixed>  $data
@@ -16,13 +21,6 @@ class CreateCustomer extends CreateRecord
      */
     protected function mutateFormDataBeforeCreate(array $data): array
     {
-        $data['phone_number'] = CustomerPhoneNumberFormState::composeForStorage(
-            $data['phone_country_code'] ?? CustomerPhoneNumberFormState::DEFAULT_COUNTRY_CODE,
-            $data['phone_number'] ?? null,
-        );
-
-        unset($data['phone_country_code']);
-
-        return $data;
+        return app(CustomerFormDataService::class)->prepareForSave($data);
     }
 }

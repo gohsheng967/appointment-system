@@ -52,6 +52,25 @@ class AppointmentStatusTest extends TestCase
         $this->assertTrue(AppointmentStatus::NO_SHOW->isTerminal());
     }
 
+    public function test_ongoing_statuses_match_latest_rule(): void
+    {
+        $this->assertSame(
+            [
+                AppointmentStatus::PENDING,
+                AppointmentStatus::CONFIRMED,
+                AppointmentStatus::IN_PROGRESS,
+            ],
+            AppointmentStatus::ongoingStatuses(),
+        );
+
+        $this->assertTrue(AppointmentStatus::PENDING->isOngoing());
+        $this->assertTrue(AppointmentStatus::CONFIRMED->isOngoing());
+        $this->assertTrue(AppointmentStatus::IN_PROGRESS->isOngoing());
+        $this->assertFalse(AppointmentStatus::COMPLETED->isOngoing());
+        $this->assertFalse(AppointmentStatus::CANCELLED->isOngoing());
+        $this->assertFalse(AppointmentStatus::NO_SHOW->isOngoing());
+    }
+
     public function test_label_and_color_helpers_for_known_and_unknown_values(): void
     {
         $this->assertSame('Confirmed', AppointmentStatus::labelFor(AppointmentStatus::CONFIRMED));

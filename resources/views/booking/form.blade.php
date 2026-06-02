@@ -18,7 +18,8 @@
 
     @if ($errors->any())
         <div class="mt-6 rounded-lg border border-red-300 bg-red-50 p-4 text-sm text-red-700">
-            <p class="font-medium">Please fix the following issues:</p>
+            <p class="font-medium">{{ \App\Support\SubmissionFeedback::failureTitle() }}</p>
+            <p class="mt-1">{{ \App\Support\SubmissionFeedback::failureIntro() }}</p>
             <ul class="mt-2 list-disc pl-5">
                 @foreach ($errors->all() as $error)
                     <li>{{ $error }}</li>
@@ -27,7 +28,7 @@
         </div>
     @endif
 
-    <form method="POST" action="{{ route('booking.store') }}" class="mt-6 grid gap-4">
+    <form method="POST" action="{{ route('booking.store') }}" class="mt-6 grid gap-4" data-loading-form>
         @csrf
 
         <div>
@@ -130,8 +131,18 @@
         </div>
 
         <button type="submit"
-                class="mt-2 inline-flex items-center justify-center rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500/30">
-            Submit Booking
+                class="mt-2 inline-flex items-center justify-center gap-2 rounded-lg bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500/30 disabled:cursor-not-allowed disabled:opacity-80"
+                data-loading-button>
+            <span data-loading-default>Submit Booking</span>
+            <span class="hidden items-center gap-2" data-loading-active aria-live="polite">
+                <x-loading-spinner
+                    size="1rem"
+                    track-color="rgba(255, 255, 255, 0.35)"
+                    indicator-color="currentColor"
+                    class="text-white"
+                />
+                <span>Submitting...</span>
+            </span>
         </button>
     </form>
 </main>

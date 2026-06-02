@@ -2,12 +2,10 @@
 
 namespace App\Filament\Widgets;
 
-use App\Enums\UserRole;
-use App\Models\Appointment;
-use Filament\Widgets\ChartWidget;
+use App\Filament\Support\AppointmentDashboardScope;
 use Illuminate\Support\Facades\Cache;
 
-class AppointmentsByBranchChartWidget extends ChartWidget
+class AppointmentsByBranchChartWidget extends DashboardChartWidget
 {
     protected ?string $heading = 'Appointments By Branch';
 
@@ -17,6 +15,11 @@ class AppointmentsByBranchChartWidget extends ChartWidget
     ];
 
     protected ?string $pollingInterval = null;
+
+    public static function canView(): bool
+    {
+        return app(AppointmentDashboardScope::class)->canViewBranchBreakdown(auth()->user());
+    }
 
     protected function getData(): array
     {
@@ -28,15 +31,12 @@ class AppointmentsByBranchChartWidget extends ChartWidget
         );
 
         $grouped = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($user): array {
-            $query = Appointment::query()
+            $query = app(AppointmentDashboardScope::class)
+                ->appointmentsQuery($user)
                 ->selectRaw('branches.name as branch_name, COUNT(appointments.id) as aggregate')
                 ->join('branches', 'branches.id', '=', 'appointments.branch_id')
                 ->groupBy('branches.name')
                 ->orderByDesc('aggregate');
-
-            if ($user?->role === UserRole::STAFF) {
-                $query->where('appointments.staff_id', $user->id);
-            }
 
             return $query
                 ->pluck('aggregate', 'branch_name')

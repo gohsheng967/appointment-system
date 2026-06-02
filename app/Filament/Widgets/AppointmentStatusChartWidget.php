@@ -3,21 +3,22 @@
 namespace App\Filament\Widgets;
 
 use App\Enums\AppointmentStatus;
-use App\Enums\UserRole;
-use App\Models\Appointment;
-use Filament\Widgets\ChartWidget;
+use App\Filament\Support\AppointmentDashboardScope;
 use Illuminate\Support\Facades\Cache;
 
-class AppointmentStatusChartWidget extends ChartWidget
+class AppointmentStatusChartWidget extends DashboardChartWidget
 {
-    protected ?string $heading = 'Appointment Status';
-
     protected int|string|array $columnSpan = [
         'md' => 1,
         'xl' => 1,
     ];
 
     protected ?string $pollingInterval = null;
+
+    public function getHeading(): string
+    {
+        return app(AppointmentDashboardScope::class)->statusHeading(auth()->user());
+    }
 
     protected function getData(): array
     {
@@ -30,13 +31,10 @@ class AppointmentStatusChartWidget extends ChartWidget
 
         /** @var array<string, int> $counts */
         $counts = Cache::remember($cacheKey, now()->addSeconds(30), function () use ($user): array {
-            $query = Appointment::query()
+            $query = app(AppointmentDashboardScope::class)
+                ->appointmentsQuery($user)
                 ->selectRaw('status, COUNT(*) as aggregate')
                 ->groupBy('status');
-
-            if ($user?->role === UserRole::STAFF) {
-                $query->where('staff_id', $user->id);
-            }
 
             return $query
                 ->pluck('aggregate', 'status')
@@ -73,4 +71,3 @@ class AppointmentStatusChartWidget extends ChartWidget
         return 'doughnut';
     }
 }
-

@@ -184,7 +184,66 @@ class DatabaseSeeder extends Seeder
                 ]);
         }
 
+        $this->enforceOngoingBookingLimitForSeededCustomers(
+            collect($customers)->pluck('id')->all(),
+        );
+
         $this->backfillMissingUuids();
+    }
+
+    /**
+     * @param  list<int>  $customerIds
+     */
+    private function enforceOngoingBookingLimitForSeededCustomers(array $customerIds): void
+    {
+        if ($customerIds === []) {
+            return;
+        }
+
+        $maxOngoingBookings = (int) config('booking.max_ongoing_bookings_per_customer', 1);
+        if ($maxOngoingBookings <= 0) {
+            return;
+        }
+
+        $ongoingStatusValues = array_map(
+            static fn (AppointmentStatus $status): string => $status->value,
+            AppointmentStatus::ongoingStatuses(),
+        );
+
+        $ongoingAppointments = Appointment::query()
+            ->whereIn('customer_id', $customerIds)
+            ->whereIn('status', $ongoingStatusValues)
+            ->orderBy('customer_id')
+            ->orderByDesc('start_at')
+            ->orderByDesc('id')
+            ->get(['id', 'customer_id']);
+
+        $ongoingCountsByCustomer = [];
+        $toConvertToCompletedIds = [];
+
+        foreach ($ongoingAppointments as $appointment) {
+            $customerId = (int) $appointment->customer_id;
+            $currentCount = $ongoingCountsByCustomer[$customerId] ?? 0;
+
+            if ($currentCount >= $maxOngoingBookings) {
+                $toConvertToCompletedIds[] = $appointment->id;
+
+                continue;
+            }
+
+            $ongoingCountsByCustomer[$customerId] = $currentCount + 1;
+        }
+
+        if ($toConvertToCompletedIds === []) {
+            return;
+        }
+
+        Appointment::query()
+            ->whereIn('id', $toConvertToCompletedIds)
+            ->update([
+                'status' => AppointmentStatus::COMPLETED->value,
+                'cancellation_reason' => null,
+            ]);
     }
 
     private function backfillMissingUuids(): void

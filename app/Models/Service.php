@@ -2,19 +2,19 @@
 
 namespace App\Models;
 
-use App\Enums\AppointmentStatus;
+use App\Models\Concerns\HasActiveAppointments;
 use App\Models\Concerns\HasUuidRouteKey;
+use App\Models\Concerns\PreventsDeletionWithActiveAppointments;
 use Database\Factories\ServiceFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Validation\ValidationException;
 
 class Service extends Model
 {
     /** @use HasFactory<ServiceFactory> */
-    use HasFactory, HasUuidRouteKey, SoftDeletes;
+    use HasActiveAppointments, HasFactory, HasUuidRouteKey, PreventsDeletionWithActiveAppointments, SoftDeletes;
 
     protected $fillable = [
         'uuid',
@@ -35,17 +35,6 @@ class Service extends Model
         ];
     }
 
-    protected static function booted(): void
-    {
-        static::deleting(function (self $service): void {
-            if ($service->hasActiveAppointments()) {
-                throw ValidationException::withMessages([
-                    'service' => ['Cannot delete service while it has active appointments (Confirmed or In Progress).'],
-                ]);
-            }
-        });
-    }
-
     /**
      * @return HasMany<Appointment, $this>
      */
@@ -54,13 +43,13 @@ class Service extends Model
         return $this->hasMany(Appointment::class);
     }
 
-    public function hasActiveAppointments(): bool
+    protected function activeAppointmentsDeletionMessage(): string
     {
-        return $this->appointments()
-            ->whereIn('status', [
-                AppointmentStatus::CONFIRMED->value,
-                AppointmentStatus::IN_PROGRESS->value,
-            ])
-            ->exists();
+        return 'Cannot delete service while it has active appointments (Confirmed or In Progress).';
+    }
+
+    protected function activeAppointmentsDeletionValidationKey(): string
+    {
+        return 'service';
     }
 }

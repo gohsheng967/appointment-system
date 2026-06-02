@@ -19,6 +19,13 @@ class EditAppointment extends EditRecord
 
     protected Width|string|null $maxContentWidth = Width::Full;
 
+    protected string $savedNotificationTitle = 'Appointment updated successfully.';
+
+    protected function getSavedNotificationTitle(): ?string
+    {
+        return $this->savedNotificationTitle;
+    }
+
     protected function getHeaderActions(): array
     {
         return [
@@ -27,10 +34,11 @@ class EditAppointment extends EditRecord
                 ->label('Cancel')
                 ->icon('heroicon-o-x-circle')
                 ->color('danger')
-                ->visible(fn (): bool => $this->record->status->canTransitionTo(AppointmentStatus::CANCELLED))
+                ->visible(fn (): bool => (auth()->user()?->can('transitionStatus', $this->record) ?? false)
+                    && $this->record->status->canTransitionTo(AppointmentStatus::CANCELLED))
                 ->form([
-                    Textarea::make('cancellation_reason')
-                        ->label('Cancellation Reason')
+                    Textarea::make('remark')
+                        ->label('Remark')
                         ->required()
                         ->rows(3),
                 ])
@@ -38,12 +46,13 @@ class EditAppointment extends EditRecord
                     app(TransitionAppointmentStatusAction::class)(
                         $this->record,
                         AppointmentStatus::CANCELLED,
-                        (string) $data['cancellation_reason'],
+                        (string) $data['remark'],
                     );
 
                     $this->record->refresh();
                 })
-                ->successNotificationTitle('Appointment cancelled'),
+                ->successNotificationTitle('Appointment cancelled successfully.')
+                ->successRedirectUrl(static fn (): string => AppointmentResource::getUrl()),
         ];
     }
 
@@ -58,25 +67,32 @@ class EditAppointment extends EditRecord
         $data['status'] = $this->record->status === AppointmentStatus::PENDING
             ? AppointmentStatus::CONFIRMED->value
             : null;
+        $data['remark'] = $data['cancellation_reason'] ?? null;
 
         return $data;
     }
 
     protected function handleRecordUpdate(Model $record, array $data): Model
     {
-        $user = auth()->user();
+        $this->savedNotificationTitle = 'Appointment updated successfully.';
 
-        $payload = $user?->isStaff() ? [] : [
+        $canEditScheduling = auth()->user()?->can('editScheduling', $this->record) ?? false;
+
+        $payload = $canEditScheduling ? [
             'branch_id' => (int) $data['branch_id'],
             'service_id' => (int) $data['service_id'],
             'customer_id' => (int) $data['customer_id'],
             'staff_id' => (int) $data['staff_id'],
             'start_at' => (string) $data['start_at_local'],
-        ];
+        ] : [];
 
         if (filled($data['status'] ?? null)) {
             $payload['status'] = (string) $data['status'];
-            $payload['cancellation_reason'] = $data['cancellation_reason'] ?? null;
+            $payload['remark'] = $data['remark'] ?? null;
+        }
+
+        if (($payload['status'] ?? null) === AppointmentStatus::CANCELLED->value) {
+            $this->savedNotificationTitle = 'Appointment cancelled successfully.';
         }
 
         $payload['auto_confirm_pending'] = true;

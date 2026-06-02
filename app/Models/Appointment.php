@@ -95,4 +95,12 @@ class Appointment extends Model
             ->where('start_at', '>=', $startUtc->toDateTimeString())
             ->where('start_at', '<', $endUtc->toDateTimeString());
     }
+
+    public function scopeActive(Builder $query): Builder
+    {
+        return $query->whereIn('status', [
+            AppointmentStatus::CONFIRMED->value,
+            AppointmentStatus::IN_PROGRESS->value,
+        ]);
+    }
 }

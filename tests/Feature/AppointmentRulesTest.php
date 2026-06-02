@@ -12,6 +12,8 @@ use App\Models\Branch;
 use App\Models\Customer;
 use App\Models\Service;
 use App\Models\User;
+use Carbon\Carbon;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
@@ -51,6 +53,30 @@ class AppointmentRulesTest extends TestCase
             'staff_id' => $staff->id,
             'start_at' => '2026-06-01T17:30',
         ]);
+    }
+
+    public function test_appointment_start_time_must_be_in_future_for_branch_timezone(): void
+    {
+        [$branch, $service, $customer, $staff] = $this->seedBase();
+
+        $frozenNow = CarbonImmutable::parse('2026-06-01 10:30:00', $branch->timezone);
+        Carbon::setTestNow($frozenNow);
+        CarbonImmutable::setTestNow($frozenNow);
+
+        try {
+            $this->expectException(ValidationException::class);
+
+            app(CreateAppointmentAction::class)([
+                'branch_id' => $branch->id,
+                'service_id' => $service->id,
+                'customer_id' => $customer->id,
+                'staff_id' => $staff->id,
+                'start_at' => '2026-06-01T10:00',
+            ]);
+        } finally {
+            Carbon::setTestNow();
+            CarbonImmutable::setTestNow();
+        }
     }
 
     public function test_staff_must_belong_to_selected_branch(): void
@@ -165,6 +191,57 @@ class AppointmentRulesTest extends TestCase
         $this->assertInstanceOf(Appointment::class, $second);
     }
 
+    public function test_customer_cannot_have_more_than_one_ongoing_booking(): void
+    {
+        [$branch, $service, $customer, $staff] = $this->seedBase();
+
+        app(CreateAppointmentAction::class)([
+            'branch_id' => $branch->id,
+            'service_id' => $service->id,
+            'customer_id' => $customer->id,
+            'staff_id' => $staff->id,
+            'start_at' => '2026-06-01T10:00',
+        ]);
+
+        $this->expectException(ValidationException::class);
+
+        app(CreateAppointmentAction::class)([
+            'branch_id' => $branch->id,
+            'service_id' => $service->id,
+            'customer_id' => $customer->id,
+            'staff_id' => $staff->id,
+            'start_at' => '2026-06-01T12:00',
+        ]);
+    }
+
+    public function test_updating_to_a_customer_with_existing_ongoing_booking_is_blocked(): void
+    {
+        [$branch, $service, $customerA, $staff] = $this->seedBase();
+        $customerB = Customer::factory()->create();
+
+        app(CreateAppointmentAction::class)([
+            'branch_id' => $branch->id,
+            'service_id' => $service->id,
+            'customer_id' => $customerA->id,
+            'staff_id' => $staff->id,
+            'start_at' => '2026-06-01T10:00',
+        ]);
+
+        $secondAppointment = app(CreateAppointmentAction::class)([
+            'branch_id' => $branch->id,
+            'service_id' => $service->id,
+            'customer_id' => $customerB->id,
+            'staff_id' => $staff->id,
+            'start_at' => '2026-06-01T12:00',
+        ]);
+
+        $this->expectException(ValidationException::class);
+
+        app(UpdateAppointmentAction::class)($secondAppointment, [
+            'customer_id' => $customerA->id,
+        ]);
+    }
+
     public function test_invalid_status_transition_and_cancel_reason_requirements_are_enforced(): void
     {
         [$branch, $service, $customer, $staff] = $this->seedBase();
@@ -269,6 +346,27 @@ class AppointmentRulesTest extends TestCase
         app(UpdateAppointmentAction::class)($appointment, [
             'staff_id' => $otherStaff->id,
             'start_at' => '2026-06-01T12:00',
+        ]);
+    }
+
+    public function test_reassignment_is_only_allowed_while_appointment_is_confirmed(): void
+    {
+        [$branch, $service, $customer, $staff] = $this->seedBase();
+
+        $appointment = app(CreateAppointmentAction::class)([
+            'branch_id' => $branch->id,
+            'service_id' => $service->id,
+            'customer_id' => $customer->id,
+            'staff_id' => $staff->id,
+            'start_at' => '2026-06-01T10:00',
+        ]);
+
+        $otherStaff = User::factory()->staff($branch)->create();
+
+        $this->expectException(ValidationException::class);
+
+        app(UpdateAppointmentAction::class)($appointment, [
+            'staff_id' => $otherStaff->id,
         ]);
     }
 

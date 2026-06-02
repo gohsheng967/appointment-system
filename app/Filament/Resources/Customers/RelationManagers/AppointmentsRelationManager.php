@@ -4,6 +4,8 @@ namespace App\Filament\Resources\Customers\RelationManagers;
 
 use App\Enums\AppointmentStatus;
 use App\Filament\Support\AppointmentStatusTabs;
+use App\Models\Appointment;
+use Carbon\CarbonInterface;
 use Filament\Actions\EditAction;
 use Filament\Actions\ViewAction;
 use Filament\Resources\RelationManagers\RelationManager;
@@ -43,11 +45,17 @@ class AppointmentsRelationManager extends RelationManager
             ->columns([
                 TextColumn::make('start_at')
                     ->label('Start')
-                    ->dateTime('Y-m-d H:i')
+                    ->formatStateUsing(static fn (mixed $state, Appointment $record): string => self::formatDateTimeForBranch(
+                        $record->start_at,
+                        $record->branch?->timezone,
+                    ))
                     ->sortable(),
                 TextColumn::make('end_at')
                     ->label('End')
-                    ->dateTime('Y-m-d H:i')
+                    ->formatStateUsing(static fn (mixed $state, Appointment $record): string => self::formatDateTimeForBranch(
+                        $record->end_at,
+                        $record->branch?->timezone,
+                    ))
                     ->sortable(),
                 TextColumn::make('branch.name')
                     ->label('Branch')
@@ -63,6 +71,7 @@ class AppointmentsRelationManager extends RelationManager
                     ->formatStateUsing(static fn (AppointmentStatus|string|null $state): string => AppointmentStatus::labelFor($state))
                     ->color(static fn (AppointmentStatus|string|null $state): string => AppointmentStatus::colorFor($state)),
                 TextColumn::make('cancellation_reason')
+                    ->label('Remark')
                     ->toggleable(isToggledHiddenByDefault: true)
                     ->placeholder('-'),
             ])
@@ -77,5 +86,21 @@ class AppointmentsRelationManager extends RelationManager
             ])
             ->headerActions([])
             ->toolbarActions([]);
+    }
+
+    private static function formatDateTimeForBranch(?CarbonInterface $dateTime, ?string $branchTimezone): string
+    {
+        if (! $dateTime) {
+            return '-';
+        }
+
+        $timezone = filled($branchTimezone) ? $branchTimezone : (string) config('app.timezone', 'UTC');
+        $local = utc_to_branch_local($dateTime, $timezone);
+
+        return sprintf(
+            '%s (%s)',
+            $local->format('Y-m-d H:i:s'),
+            timezone_utc_offset_label($timezone, $local),
+        );
     }
 }

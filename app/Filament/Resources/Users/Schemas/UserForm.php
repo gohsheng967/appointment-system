@@ -22,7 +22,11 @@ class UserForm
                 TextInput::make('email')
                     ->required()
                     ->email()
-                    ->maxLength(255),
+                    ->maxLength(255)
+                    ->unique(ignoreRecord: true)
+                    ->validationMessages([
+                        'unique' => 'This email is already registered.',
+                    ]),
                 Select::make('role')
                     ->options(UserRole::options())
                     ->default(UserRole::STAFF->value)
@@ -46,14 +50,14 @@ class UserForm
                             return false;
                         }
 
-                        return $record->hasActiveAppointments();
+                        return self::staffHasActiveAppointments($record);
                     })
                     ->helperText(function (?User $record): ?string {
                         if (! $record || $record->role !== UserRole::STAFF) {
                             return null;
                         }
 
-                        return $record->hasActiveAppointments()
+                        return self::staffHasActiveAppointments($record)
                             ? 'Branch cannot be changed while this staff has active appointments (Confirmed or In Progress).'
                             : null;
                     })
@@ -64,5 +68,14 @@ class UserForm
                     ->required(fn (string $operation): bool => $operation === 'create')
                     ->minLength(8),
             ]);
+    }
+
+    private static function staffHasActiveAppointments(User $record): bool
+    {
+        static $cache = [];
+
+        $cacheKey = $record->getKey() ?? spl_object_id($record);
+
+        return $cache[$cacheKey] ??= $record->hasActiveAppointments();
     }
 }

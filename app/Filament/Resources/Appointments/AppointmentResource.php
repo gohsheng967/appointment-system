@@ -2,7 +2,7 @@
 
 namespace App\Filament\Resources\Appointments;
 
-use App\Enums\AppointmentStatus;
+use App\Domain\Appointments\Services\AppointmentAuthorizationService;
 use App\Filament\Resources\Appointments\Pages\CreateAppointment;
 use App\Filament\Resources\Appointments\Pages\EditAppointment;
 use App\Filament\Resources\Appointments\Pages\ListAppointments;
@@ -17,6 +17,7 @@ use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Database\Eloquent\Model;
 
 class AppointmentResource extends Resource
@@ -47,43 +48,48 @@ class AppointmentResource extends Resource
 
     public static function getEloquentQuery(): Builder
     {
-        $query = parent::getEloquentQuery()->with(['branch', 'service', 'staff', 'customer']);
-        $user = auth()->user();
-
-        if ($user?->isStaff()) {
-            $query->where('staff_id', $user->id);
-        }
-
-        return $query;
+        return app(AppointmentAuthorizationService::class)
+            ->scopeVisibleTo(
+                parent::getEloquentQuery()->with(['branch', 'service', 'staff', 'customer']),
+                Auth::user(),
+            );
     }
 
     public static function canViewAny(): bool
     {
-        return auth()->check();
+        $user = Auth::user();
+
+        return $user?->can('viewAny', Appointment::class) ?? false;
     }
 
     public static function canCreate(): bool
     {
-        return auth()->user()?->isAdmin() ?? false;
+        $user = Auth::user();
+
+        return $user?->can('create', Appointment::class) ?? false;
     }
 
     public static function canEdit(Model $record): bool
     {
-        if ($record->status instanceof AppointmentStatus && $record->status->isTerminal()) {
-            return false;
-        }
+        $user = Auth::user();
 
-        return auth()->user()?->isAdmin() ?? false;
+        return $record instanceof Appointment
+            && ($user?->can('editScheduling', $record) ?? false);
     }
 
     public static function canDelete(Model $record): bool
     {
-        return auth()->user()?->isAdmin() ?? false;
+        $user = Auth::user();
+
+        return $record instanceof Appointment
+            && ($user?->can('delete', $record) ?? false);
     }
 
     public static function canDeleteAny(): bool
     {
-        return auth()->user()?->isAdmin() ?? false;
+        $user = Auth::user();
+
+        return $user?->can('deleteAny', Appointment::class) ?? false;
     }
 
     public static function getPages(): array

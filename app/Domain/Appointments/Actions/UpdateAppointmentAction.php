@@ -2,25 +2,20 @@
 
 namespace App\Domain\Appointments\Actions;
 
-use App\Domain\Appointments\Services\AppointmentOverlapService;
-use App\Domain\Appointments\Services\BranchOperatingHoursService;
+use App\Domain\Appointments\Services\AppointmentSchedulingResolver;
+use App\Domain\Appointments\Services\AppointmentReassignmentAvailabilityService;
 use App\Domain\Appointments\Services\StaffAvailabilityLockService;
 use App\Enums\AppointmentStatus;
-use App\Enums\UserRole;
 use App\Models\Appointment;
-use App\Models\Branch;
-use App\Models\Customer;
-use App\Models\Service;
-use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class UpdateAppointmentAction
 {
     public function __construct(
-        private readonly BranchOperatingHoursService $operatingHoursService,
-        private readonly AppointmentOverlapService $overlapService,
+        private readonly AppointmentSchedulingResolver $schedulingResolver,
         private readonly TransitionAppointmentStatusAction $transitionStatusAction,
+        private readonly AppointmentReassignmentAvailabilityService $reassignmentAvailabilityService,
         private readonly StaffAvailabilityLockService $staffLockService,
     ) {}
 
@@ -32,6 +27,7 @@ class UpdateAppointmentAction
      *   staff_id?: int,
      *   start_at?: string,
      *   status?: string,
+     *   remark?: string|null,
      *   cancellation_reason?: string|null,
      *   auto_confirm_pending?: bool
      * }  $payload
@@ -41,6 +37,7 @@ class UpdateAppointmentAction
         return DB::transaction(function () use ($appointment, $payload): Appointment {
             /** @var AppointmentStatus $currentStatus */
             $currentStatus = $appointment->status;
+            $targetStatusValue = $payload['status'] ?? null;
 
             if (
                 $currentStatus->isTerminal()
@@ -52,39 +49,49 @@ class UpdateAppointmentAction
                 ]);
             }
 
-            $branch = Branch::query()->findOrFail($payload['branch_id'] ?? $appointment->branch_id);
-            $service = Service::query()->findOrFail($payload['service_id'] ?? $appointment->service_id);
-            $customer = Customer::query()->findOrFail($payload['customer_id'] ?? $appointment->customer_id);
-            $staff = User::query()->findOrFail($payload['staff_id'] ?? $appointment->staff_id);
+            if (
+                ! isset($targetStatusValue)
+                && ($payload['auto_confirm_pending'] ?? false)
+                && $currentStatus === AppointmentStatus::PENDING
+            ) {
+                $targetStatusValue = AppointmentStatus::CONFIRMED->value;
+            }
 
-            $startUtc = isset($payload['start_at'])
-                ? branch_local_to_utc($payload['start_at'], $branch->timezone)
-                : $appointment->start_at->toImmutable();
-            $endUtc = $startUtc->addMinutes($service->duration_minutes);
+            $effectiveStatus = isset($targetStatusValue)
+                ? AppointmentStatus::from($targetStatusValue)
+                : $currentStatus;
 
-            $persistUpdate = function () use ($appointment, $payload, $branch, $service, $customer, $staff, $startUtc, $endUtc): Appointment {
-                $this->assertStaffIsAssignableToBranch($staff, $branch);
-                $this->operatingHoursService->assertWithinHours($branch, $startUtc, $endUtc);
-                $this->overlapService->assertNoOverlap($staff->id, $startUtc, $endUtc, $appointment->id);
+            if (
+                array_key_exists('staff_id', $payload)
+                && filled($appointment->staff_id)
+                && (int) $payload['staff_id'] !== (int) $appointment->staff_id
+            ) {
+                $this->reassignmentAvailabilityService->assertCanReassign($appointment);
+            }
 
+            $resolved = $this->schedulingResolver->resolveForUpdate(
+                $appointment,
+                $payload,
+                $effectiveStatus->isOngoing(),
+            );
+            $staff = $resolved['staff'];
+
+            $persistUpdate = function () use (
+                $appointment,
+                $payload,
+                $resolved,
+                $staff,
+                $targetStatusValue,
+            ): Appointment {
                 $appointment->fill([
-                    'branch_id' => $branch->id,
+                    'branch_id' => $resolved['branch']->id,
                     'staff_id' => $staff->id,
-                    'customer_id' => $customer->id,
-                    'service_id' => $service->id,
-                    'start_at' => $startUtc,
-                    'end_at' => $endUtc,
+                    'customer_id' => $resolved['customer']->id,
+                    'service_id' => $resolved['service']->id,
+                    'start_at' => $resolved['startUtc'],
+                    'end_at' => $resolved['endUtc'],
                 ]);
                 $appointment->save();
-
-                $targetStatusValue = $payload['status'] ?? null;
-                if (
-                    ! isset($targetStatusValue)
-                    && ($payload['auto_confirm_pending'] ?? false)
-                    && $currentStatus === AppointmentStatus::PENDING
-                ) {
-                    $targetStatusValue = AppointmentStatus::CONFIRMED->value;
-                }
 
                 if (isset($targetStatusValue)) {
                     $targetStatus = AppointmentStatus::from($targetStatusValue);
@@ -92,7 +99,7 @@ class UpdateAppointmentAction
                     $this->transitionStatusAction->__invoke(
                         $appointment,
                         $targetStatus,
-                        $payload['cancellation_reason'] ?? null,
+                        $payload['remark'] ?? $payload['cancellation_reason'] ?? null,
                     );
                 }
 
@@ -101,20 +108,5 @@ class UpdateAppointmentAction
 
             return $this->staffLockService->forStaff($staff->id, $persistUpdate);
         });
-    }
-
-    private function assertStaffIsAssignableToBranch(User $staff, Branch $branch): void
-    {
-        if ($staff->role !== UserRole::STAFF) {
-            throw ValidationException::withMessages([
-                'staff_id' => ['Only staff users can be assigned to appointments.'],
-            ]);
-        }
-
-        if ((int) $staff->branch_id !== (int) $branch->id) {
-            throw ValidationException::withMessages([
-                'staff_id' => ['Selected staff does not belong to the selected branch.'],
-            ]);
-        }
     }
 }

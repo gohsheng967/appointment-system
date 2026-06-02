@@ -19,11 +19,7 @@ class ViewAppointment extends ViewRecord
             EditAction::make()
                 ->color('warning')
                 ->icon('heroicon-m-pencil-square')
-                ->visible(fn (): bool => auth()->user()?->isAdmin() ?? false)
-                ->disabled(fn (): bool => $this->record->status->isTerminal())
-                ->extraAttributes(fn (): array => $this->record->status->isTerminal()
-                    ? ['class' => 'cursor-not-allowed']
-                    : []),
+                ->visible(fn (): bool => auth()->user()?->can('editScheduling', $this->record) ?? false),
         ];
     }
 }

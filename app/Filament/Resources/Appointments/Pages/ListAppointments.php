@@ -34,7 +34,7 @@ class ListAppointments extends ListRecords
     {
         return [
             CreateAction::make()
-                ->visible(fn (): bool => auth()->user()?->isAdmin() ?? false),
+                ->visible(fn (): bool => auth()->user()?->can('create', AppointmentResource::getModel()) ?? false),
         ];
     }
 }

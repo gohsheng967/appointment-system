@@ -19,6 +19,26 @@ class AppointmentForm
 {
     public static function configure(Schema $schema): Schema
     {
+        $branchCache = [];
+
+        $resolveBranch = static function (Get $get) use (&$branchCache): ?Branch {
+            $branchId = $get('branch_id');
+
+            if (blank($branchId)) {
+                return null;
+            }
+
+            $cacheKey = (string) $branchId;
+
+            if (! array_key_exists($cacheKey, $branchCache)) {
+                $branchCache[$cacheKey] = Branch::query()
+                    ->select(['id', 'timezone'])
+                    ->find($branchId);
+            }
+
+            return $branchCache[$cacheKey];
+        };
+
         return $schema
             ->components([
                 Section::make('Booking Details')
@@ -37,13 +57,13 @@ class AppointmentForm
                             ->required()
                             ->live()
                             ->afterStateUpdated(fn (Set $set): mixed => $set('staff_id', null))
-                            ->disabled(fn (): bool => auth()->user()?->isStaff() ?? false),
+                            ->disabled(static fn (?Appointment $record): bool => ! self::canEditScheduling($record)),
                         Select::make('service_id')
                             ->relationship('service', 'name')
                             ->searchable()
                             ->preload()
                             ->required()
-                            ->disabled(fn (): bool => auth()->user()?->isStaff() ?? false),
+                            ->disabled(static fn (?Appointment $record): bool => ! self::canEditScheduling($record)),
                         Select::make('staff_id')
                             ->relationship(
                                 name: 'staff',
@@ -59,22 +79,37 @@ class AppointmentForm
                             ->searchable()
                             ->preload()
                             ->required()
-                            ->disabled(fn (Get $get): bool => (auth()->user()?->isStaff() ?? false) || blank($get('branch_id'))),
+                            ->helperText(static function (?Appointment $record): ?string {
+                                if (
+                                    $record
+                                    && filled($record->staff_id)
+                                    && $record->status !== AppointmentStatus::CONFIRMED
+                                ) {
+                                    return 'Staff can only be reassigned while the appointment is confirmed.';
+                                }
+
+                                return null;
+                            })
+                            ->disabled(static function (Get $get, ?Appointment $record): bool {
+                                if (! self::canEditScheduling($record) || blank($get('branch_id'))) {
+                                    return true;
+                                }
+
+                                return (bool) (
+                                    $record
+                                    && filled($record->staff_id)
+                                    && $record->status !== AppointmentStatus::CONFIRMED
+                                );
+                            }),
                         Select::make('customer_id')
                             ->relationship('customer', 'name')
                             ->searchable()
                             ->preload()
                             ->required()
-                            ->disabled(fn (): bool => auth()->user()?->isStaff() ?? false),
+                            ->disabled(static fn (?Appointment $record): bool => ! self::canEditScheduling($record)),
                         TextInput::make('start_at_local')
-                            ->label(static function (Get $get): string {
-                                $branchId = $get('branch_id');
-
-                                if (blank($branchId)) {
-                                    return 'Start Datetime (Branch Local)';
-                                }
-
-                                $branch = Branch::query()->find($branchId);
+                            ->label(static function (Get $get) use ($resolveBranch): string {
+                                $branch = $resolveBranch($get);
 
                                 if (! $branch) {
                                     return 'Start Datetime (Branch Local)';
@@ -87,14 +122,8 @@ class AppointmentForm
                             })
                             ->type('datetime-local')
                             ->required()
-                            ->helperText(static function (Get $get): string {
-                                $branchId = $get('branch_id');
-
-                                if (blank($branchId)) {
-                                    return 'Enter the datetime in the selected branch timezone.';
-                                }
-
-                                $branch = Branch::query()->find($branchId);
+                            ->helperText(static function (Get $get) use ($resolveBranch): string {
+                                $branch = $resolveBranch($get);
 
                                 if (! $branch) {
                                     return 'Enter the datetime in the selected branch timezone.';
@@ -107,7 +136,7 @@ class AppointmentForm
                                 );
                             })
                             ->live()
-                            ->disabled(fn (): bool => auth()->user()?->isStaff() ?? false)
+                            ->disabled(static fn (?Appointment $record): bool => ! self::canEditScheduling($record))
                             ->columnSpanFull(),
                     ]),
                 Section::make('Status Update')
@@ -130,12 +159,28 @@ class AppointmentForm
 
                                 return AppointmentStatus::CONFIRMED->value;
                             }),
-                        Textarea::make('cancellation_reason')
+                        Textarea::make('remark')
+                            ->label('Remark')
                             ->nullable()
                             ->rows(3)
                             ->helperText('Required when status is cancelled.')
                             ->requiredIf('status', AppointmentStatus::CANCELLED->value),
                     ]),
             ]);
+    }
+
+    private static function canEditScheduling(?Appointment $record): bool
+    {
+        $user = auth()->user();
+
+        if (! $user) {
+            return false;
+        }
+
+        if (! $record) {
+            return $user->can('create', Appointment::class);
+        }
+
+        return $user->can('editScheduling', $record);
     }
 }
