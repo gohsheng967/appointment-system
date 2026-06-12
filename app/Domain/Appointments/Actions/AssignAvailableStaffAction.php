@@ -16,10 +16,14 @@ class AssignAvailableStaffAction
         CarbonInterface $startUtc,
         CarbonInterface $endUtc,
     ): User {
+
+        $starttime = $startUtc->toDateTimeString();
+        $endtime = $endUtc->toDateTimeString();
+
         $availableStaff = User::query()
             ->where('role', UserRole::STAFF->value)
             ->where('branch_id', $branch->id)
-            ->whereDoesntHave('appointments', function ($query) use ($startUtc, $endUtc): void {
+            ->whereDoesntHave('appointments', function ($query) use ($starttime, $endtime): void {
                 $query
                     ->whereIn(
                         'status',
@@ -28,8 +32,15 @@ class AssignAvailableStaffAction
                             AppointmentStatus::blockingStatuses(),
                         ),
                     )
-                    ->where('start_at', '<', $endUtc->toDateTimeString())
-                    ->where('end_at', '>', $startUtc->toDateTimeString());
+                    ->where('start_at', '<', $endtime)
+                    ->where('end_at', '>', $starttime);
+            })
+            ->where(function($q) use ($starttime, $endtime) {
+                $checkWorkingTimeConfigure = $q->start_working_time && $end_working_time;
+                return $q->when($checkWorkingTimeConfigure, function($sq) use ($starttime, $endtime) {
+                    return $sq->where('start_working_time', '<', $endtime)
+                                ->where('end_working_time', '>', $starttime);
+                });
             })
             ->orderBy('id')
             ->first();

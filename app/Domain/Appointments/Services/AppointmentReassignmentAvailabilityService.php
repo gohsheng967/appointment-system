@@ -43,6 +43,8 @@ class AppointmentReassignmentAvailabilityService
      */
     private function getAvailableStaffOptions(Appointment $appointment): array
     {
+        $endtime = $appointment->end_at->toDateTimeString();
+        $starttime = $appointment->start_at->toDateTimeString();
         return User::query()
             ->where('role', UserRole::STAFF->value)
             ->where('branch_id', $appointment->branch_id)
@@ -50,7 +52,7 @@ class AppointmentReassignmentAvailabilityService
                 filled($appointment->staff_id),
                 fn (Builder $query): Builder => $query->whereKeyNot($appointment->staff_id),
             )
-            ->whereDoesntHave('appointments', function (Builder $query) use ($appointment): void {
+            ->whereDoesntHave('appointments', function (Builder $query) use ($appointment, $starttime, $endtime): void {
                 $query
                     ->whereIn(
                         'status',
@@ -59,9 +61,16 @@ class AppointmentReassignmentAvailabilityService
                             AppointmentStatus::blockingStatuses(),
                         ),
                     )
-                    ->where('start_at', '<', $appointment->end_at->toDateTimeString())
-                    ->where('end_at', '>', $appointment->start_at->toDateTimeString())
+                    ->where('start_at', '<', $endtime)
+                    ->where('end_at', '>', $starttime)
                     ->whereKeyNot($appointment->getKey());
+            })
+            ->where(function($q) use ($starttime, $endtime) {
+                $checkWorkingTimeConfigure = $q->start_working_time && $end_working_time;
+                return $q->when($checkWorkingTimeConfigure, function($sq) use ($starttime, $endtime) {
+                    return $sq->where('start_working_time', '<', $endtime)
+                                ->where('end_working_time', '>', $starttime);
+                });
             })
             ->orderBy('name')
             ->pluck('name', 'id')

@@ -67,6 +67,54 @@ class UserForm
                     ->dehydrated(fn ($state): bool => filled($state))
                     ->required(fn (string $operation): bool => $operation === 'create')
                     ->minLength(8),
+                TextInput::make('start_working_time')
+                    ->rules([
+                        fn (Get $get): Closure => function (string $attribute, $value, Closure $fail) use ($get) {
+                            $endtime = Carbon::parse($get('end_working_time'));
+
+                            $starttime = Carbon::parse($value);
+
+                            if ($endtime->gte($$starttime)) {
+                                $fail("The {$attribute} is invalid.");
+                            }
+                        }
+                    ])
+                    ->label(static function (Get $get) use ($resolveBranch): string {
+                        $branch = $resolveBranch($get);
+
+                        if (! $branch) {
+                            return 'Working Start Datetime (Branch Local)';
+                        }
+
+                        return sprintf(
+                            'Working Start Time (%s)',
+                            timezone_utc_offset_label($branch->timezone),
+                        );
+                    }),
+                TextInput::make('start_working_time')
+                    ->rules([
+                        fn (Get $get): Closure => function (string $attribute, $value, Closure $fail) use ($get) {
+                            $startime = Carbon::parse($get('start_working_time'));
+
+                            $endtime = Carbon::parse($value);
+
+                            if ($endtime->gte($$starttime)) {
+                                $fail("The {$attribute} is invalid.");
+                            }
+                        }
+                    ])
+                    ->label(static function (Get $get) use ($resolveBranch): string {
+                        $branch = $resolveBranch($get);
+
+                        if (! $branch) {
+                            return 'Working End Time (Branch Local)';
+                        }
+
+                        return sprintf(
+                            'Working End Time (%s)',
+                            timezone_utc_offset_label($branch->timezone),
+                        );
+                    })
             ]);
     }
 
